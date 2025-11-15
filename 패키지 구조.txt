@@ -86,7 +86,7 @@ public class AuthApplication {
 2-1. SecurityConfig.java
 package com.example.auth.config;
 
-import com.example.auth.repository.UserRepository;
+import repository.com.carpool.auth.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -233,7 +233,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 package com.example.auth.controller;
 
 import com.example.auth.dto.*;
-import com.example.auth.service.UserService;
+import service.com.carpool.auth.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -380,8 +380,8 @@ public class LoginResponseDto {
 5-4. UserResponseDto.java
 package com.example.auth.dto;
 
-import com.example.auth.domain.Role;
-import com.example.auth.domain.User;
+import domain.com.carpool.auth.Role;
+import domain.com.carpool.auth.User;
 
 public class UserResponseDto {
     private Long id;
@@ -407,7 +407,7 @@ public class UserResponseDto {
 6. UserRepository.java
 package com.example.auth.repository;
 
-import com.example.auth.domain.User;
+import domain.com.carpool.auth.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
@@ -420,11 +420,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 7. UserService.java
 package com.example.auth.service;
 
-import com.example.auth.domain.Role;
-import com.example.auth.domain.User;
+import domain.com.carpool.auth.Role;
+import domain.com.carpool.auth.User;
 import com.example.auth.dto.*;
-import com.example.auth.repository.UserRepository;
-import com.example.auth.config.JwtUtil;
+import repository.com.carpool.auth.UserRepository;
+import config.com.carpool.auth.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -1,4 +1,5 @@
-package com.example.auth.web;
+//전격 예외 처리기
+package com.carpool.global.exception;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
