@@ -1,7 +1,9 @@
-package com.example.auth.controller;
+package com.carpool.user;
 
-import com.example.auth.dto.*;
-import com.example.auth.service.UserService;
+import com.carpool.user.dto.LoginRequestDto;
+import com.carpool.user.dto.LoginResponseDto;
+import com.carpool.user.dto.SignupRequestDto;
+import com.carpool.user.dto.UserResponseDto;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

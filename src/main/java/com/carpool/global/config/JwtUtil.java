@@ -1,4 +1,4 @@
-package com.example.auth.config;
+package com.carpool.global.config;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;

@@ -1,6 +1,7 @@
-package com.example.auth.config;
+//보안설정
+package com.carpool.global.config;
 
-import com.example.auth.repository.UserRepository;
+import com.carpool.user.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

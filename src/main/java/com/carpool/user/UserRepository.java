@@ -1,6 +1,5 @@
-package com.example.auth.repository;
+package com.carpool.user;
 
-import com.example.auth.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 

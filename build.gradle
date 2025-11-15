@@ -39,12 +39,22 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 
+    // JTS 라이브러리
+    implementation 'org.locationtech.jts:jts-core:1.19.0'
+
+    // Hibernate Spatial(JTS를 DB에 저장하는 데 필요)
+    implementation 'org.hibernate.orm:hibernate-spatial:6.4.1.Final'
+
     // ✅ Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
     // ✅ Lombok
     compileOnly 'org.projectlombok:lombok:1.18.42'
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
+
+    // WebSocket 의존성
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
 }
 
 

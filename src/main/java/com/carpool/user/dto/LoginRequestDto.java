@@ -1,4 +1,4 @@
-package com.example.auth.dto;
+package com.carpool.user.dto;
 
 import jakarta.validation.constraints.NotBlank;
 

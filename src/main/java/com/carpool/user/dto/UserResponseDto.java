@@ -1,7 +1,7 @@
-package com.example.auth.dto;
+package com.carpool.user.dto;
 
-import com.example.auth.domain.Role;
-import com.example.auth.domain.User;
+import com.carpool.user.Role;
+import com.carpool.user.User;
 
 public class UserResponseDto {
     private Long id;

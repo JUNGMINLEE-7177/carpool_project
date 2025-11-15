@@ -1,10 +1,10 @@
-package com.example.auth.service;
+package com.carpool.user;
 
-import com.example.auth.domain.Role;
-import com.example.auth.domain.User;
-import com.example.auth.dto.*;
-import com.example.auth.repository.UserRepository;
-import com.example.auth.config.JwtUtil;
+import com.carpool.user.dto.LoginRequestDto;
+import com.carpool.user.dto.LoginResponseDto;
+import com.carpool.user.dto.SignupRequestDto;
+import com.carpool.user.dto.UserResponseDto;
+import com.carpool.global.config.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
