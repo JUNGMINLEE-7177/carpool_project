@@ -10,9 +10,13 @@ spring:
     properties:
       hibernate:
         format_sql: true
+    defer-datasource-initialization: true
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  sql:
+    init:
+      mode: always
 logging:
   level:
     org.hibernate.SQL: debug

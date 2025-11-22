@@ -7,3 +7,18 @@ CREATE TABLE IF NOT EXISTS users (
     enabled BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+
+CREATE TABLE IF NOT EXISTS ride_request (
+    id            BIGINT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    end_address   VARCHAR(255)    NOT NULL,
+    end_point     POINT           NOT NULL,
+    start_address VARCHAR(255)    NOT NULL,
+    start_point   POINT           NOT NULL,
+    status        ENUM('MATCHED', 'WAITING') NOT NULL,
+    username      VARCHAR(255)    NOT NULL,
+    user_id       BIGINT          NOT NULL,
+    CONSTRAINT fk_ride_request_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+);
