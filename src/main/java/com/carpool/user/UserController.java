@@ -1,34 +1,41 @@
 package com.carpool.user;
 
-import com.carpool.user.dto.LoginRequestDto;
-import com.carpool.user.dto.LoginResponseDto;
-import com.carpool.user.dto.SignupRequestDto;
-import com.carpool.user.dto.UserResponseDto;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+// ✨ Lombok 적용: @RequiredArgsConstructor 추가
+// (수동 생성자 삭제)
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/users") // 공통 경로
+@RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
-    public UserController(UserService userService) { this.userService = userService; }
 
     @PostMapping("/signup")
-    public ResponseEntity<UserResponseDto> signup(@Valid @RequestBody SignupRequestDto req) {
-        return ResponseEntity.ok(userService.signup(req));
+    public ResponseEntity<?> signup(@Valid @RequestBody LoginRequestDto request) {
+        try {
+            User user = userService.signup(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(user);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponseDto> login(@Valid @RequestBody LoginRequestDto req) {
-        return ResponseEntity.ok(userService.login(req));
-    }
-
-    @GetMapping("/me")
-    public ResponseEntity<UserResponseDto> me(Authentication auth) {
-        String username = (String) auth.getPrincipal();
-        return ResponseEntity.ok(userService.me(username));
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDto request) {
+        try {
+            User user = userService.login(request);
+            return ResponseEntity.ok(user);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+        }
     }
 }

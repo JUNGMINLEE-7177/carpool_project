@@ -11,8 +11,8 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**") // /api/ 로 시작하는 모든 경로
-                .allowedOrigins("http://localhost:5500") // VSCode Live Server 주소
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowCredentials(true);
+            .allowedOrigins("http://localhost:5500") // VSCode Live Server 주소
+            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            .allowCredentials(true);
     }
 }

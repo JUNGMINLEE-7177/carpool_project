@@ -1,50 +1,38 @@
 package com.carpool.user;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+// ✨ Lombok 적용: @Getter, @Setter, @NoArgsConstructor 추가
+// (수동 Getter/Setter/생성자 모두 삭제)
 
 @Getter
 @Setter
-@NoArgsConstructor
+@NoArgsConstructor // JPA는 @Entity 클래스에 대해 기본 생성자를 요구합니다.
 @Entity
-@Table(name = "users", indexes = {
-        @Index(name = "ux_users_username", columnList = "username", unique = true),
-        @Index(name = "ux_users_email", columnList = "email", unique = true)
-})
+@Table(name = "users") // 'user'는 DB 예약어일 수 있으므로 'users' 사용
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false, unique=true, length=30)
+    @Column(nullable = false, unique = true, length = 50)
     private String username;
 
-    @Column(nullable=false, unique=true, length=190)
-    private String email;
+    @Column(nullable = false)
+    private String password; // 암호화된 비밀번호 저장
 
-    @Column(name="password_hash", nullable=false, length=60)
-    private String passwordHash;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable=false)
-    private Role role = Role.USER;
-
-    @Column(nullable=false)
-    private boolean enabled = true;
-
-    @Column(name = "created_at", nullable=false)
-    private LocalDateTime createdAt = LocalDateTime.now();
-
-    // 회원가입/로그인에 필요한 생성자
-    public User(String username, String email, String passwordHash, Role role) {
+    // 회원가입 시 사용할 생성자 (수동으로 남겨둠)
+    public User(String username, String password) {
         this.username = username;
-        this.email = email;
-        this.passwordHash = passwordHash;
-        this.role = role;
+        this.password = password;
     }
 }

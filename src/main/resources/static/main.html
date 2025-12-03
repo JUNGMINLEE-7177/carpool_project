@@ -3,585 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>택시 카풀 앱 (프론트엔드)</title>
-    <!-- Tailwind CSS 로드 -->
+    <title>택시 카풀 앱 (Final)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- React 로드 -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <!-- Babel (JSX) 로드 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
     <style>
-        /* 간단한 페이드-인 애니메이션 */
-        @keyframes fade-in {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-            animation: fade-in 0.5s ease-out forwards;
-        }
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body class="bg-gray-100">
-<div id="root"></div>
+<body class="bg-slate-100 text-slate-900">
+<div id="root" class="min-h-screen flex items-center justify-center p-4"></div>
 
 <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // -----------------------------------------------------------------
-    // [!! 매우 중요 !!]
-    // [!! 여기에 본인의 Google Maps API 키를 입력하세요 !!]
-    // -----------------------------------------------------------------
-    // [!! 사용자님께 !!]
-    // 방금 보내주신 "BillingNotEnabledMapError"는 코드가 아니라
-    // Google Cloud 계정 설정 문제입니다.
-    //
-    // [해결 방법]
-    // 1. Google Cloud Console에 로그인합니다.
-    // 2. 이 API 키가 속한 프로젝트를 선택합니다.
-    // 3. '결제(Billing)' 메뉴로 이동하여 신용카드 등을 등록해 '결제 계정'을 활성화해야 합니다.
-    // (참고: 과제/테스트용 무료 한도(Free Tier)가 있으므로 바로 요금이 청구되진 않습니다.)
-    //
-    // [!! 보안 경고 !!]
-    // API 키가 채팅에 노출되었습니다! 이 키는 절대 외부에 공유하면 안 됩니다.
-    // 지금처럼 코드에 직접 키를 입력하는 대신, 실제 배포 시에는
-    // 백엔드 서버를 통해 키를 관리하는 것이 안전합니다.
-    // (지금은 과제용이므로 그대로 사용하시되, 노출된 키는 비활성화하는 것이 좋습니다.)
-    //
-    // 아래 "YOUR_API_KEY_HERE" 부분에 다시 키를 입력하고,
-    // Google Cloud에서 '결제'를 활성화한 후 실행해 주세요.
-    // -----------------------------------------------------------------
-    const GOOGLE_MAPS_API_KEY = "AIzaSyDz7SUyAbPIE0HPhX7nq43_574zZ_hctuE"; //<----api 키 교체
-    // -----------------------------------------------------------------
+    // ⚠️ Google Maps API 키 (본인 키로 교체 필수)
+    const GOOGLE_MAPS_API_KEY = "YOUR_API_KEY_HERE"; 
+    
+    // 백엔드 주소
+    const API_BASE_URL = "http://localhost:8080";
 
-
-    // --- Mock WebSocket ---
-    // WebSocket 연결을 시뮬레이션합니다.
-    let mockSocket = null;
-    const connectMockSocket = (onMatchCallback) => {
-        console.log("Mock Socket: 연결 시도...");
-        mockSocket = {
-            // 클라이언트가 서버로 메시지를 보낼 때 (예: 카풀 요청)
-            send: (message) => {
-                console.log("Mock Socket (Client -> Server):", message);
-                const data = JSON.parse(message);
-
-                // 카풀 요청을 받으면 5초 후 강제로 매칭 성공 응답을 보냄
-                if (data.type === 'requestRide') {
-                    console.log("Mock Socket: 카풀 요청 받음. 5초 후 매칭 시뮬레이션 시작...");
-                    setTimeout(() => {
-                        const mockMatchData = {
-                            success: true,
-                            matchId: 123,
-                            opponent: {
-                                username: 'user_b (테스트)',
-                                start_address: '서울시 강남구 테헤란로 123'
-                            }
-                        };
-                        console.log("Mock Socket (Server -> Client):", mockMatchData);
-                        onMatchCallback(mockMatchData); // 매칭 콜백 실행
-                    }, 5000); // 5초 딜레이
-                }
-            },
-            close: () => {
-                console.log("Mock Socket: 연결 종료.");
-                mockSocket = null;
-            }
-        };
-        console.log("Mock Socket: 연결 성공.");
-        return mockSocket;
-    };
-
-    // --- Mock API (백엔드 시뮬레이션) ---
-    const mockApi = {
-        // 로그인 시뮬레이션 (항상 1초 후 성공)
-        login: (username, password) => {
-            console.log(`API: 로그인 시도 (${username}/${password})`);
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    console.log("API: 로그인 성공 (Mock)");
-                    resolve({ success: true, token: "fake-jwt-token", user: { username: username } });
-                }, 1000);
+    // --- [1] 백엔드 API (로그인 & 회원가입) ---
+    const api = {
+        login: async (username, password) => {
+            const res = await fetch(`${API_BASE_URL}/api/users/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
             });
-        },
-        // 실제라면 카풀 요청도 REST API로 할 수 있지만, 아키텍처에 따라 WebSocket을 사용합니다.
-    };
-
-    // --- Gemini API (실제 LLM 호출) ---
-    const geminiApi = {
-        // API 호출 (재시도 포함)
-        async fetchWithRetry(apiUrl, payload, retries = 3, delay = 1000) {
-            // apiKey는 Canvas 환경에서 자동으로 제공됩니다.
-            const apiKey = "";
-
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(`${apiUrl}?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const result = await response.json();
-                    const candidate = result.candidates?.[0];
-
-                    if (candidate && candidate.content?.parts?.[0]?.text) {
-                        return candidate.content.parts[0].text;
-                    } else {
-                        // 응답은 왔지만, 텍스트가 없는 경우 (예: safety settings)
-                        console.error("Gemini API Error: No text in response", result);
-                        return "죄송합니다. 응답을 생성하지 못했습니다. (콘솔 확인)";
-                    }
-
-                } catch (error) {
-                    // 재시도 로직은 콘솔에 경고만 하고, 에러로 기록하지 않습니다.
-                    if (i === retries - 1) {
-                        // 마지막 재시도 실패
-                        console.error("Gemini API Error: All retries failed.", error);
-                        return "죄송합니다. AI 기능에 오류가 발생했습니다.";
-                    }
-                    // Exponential backoff
-                    await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
-                }
+            if (!res.ok) {
+                // 에러 메시지 파싱
+                const text = await res.text();
+                throw new Error(text || "로그인 실패");
             }
+            return await res.json();
         },
-
-        // 아이스브레이커 생성
-        async generateIcebreakers(startPoint, endPoint) {
-            console.log(`Gemini: 아이스브레이커 생성 중 (출발: ${startPoint}, 도착: ${endPoint})`);
-
-            const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
-
-            const systemPrompt = "당신은 택시 카풀 앱을 위한 친절한 AI 도우미입니다. 두 명의 낯선 사람이 방금 카풀에 매칭되었습니다. 이들의 어색함을 풀 수 있도록 가볍고 재미있는 대화 주제(아이스브레이커) 3가지를 제안해주세요. 각 주제는 한 문장으로, 재미있는 이모지를 1개씩 포함해야 합니다. 반드시 한국어로 응답하세요.";
-
-            const userQuery = `카풀 경로:\n- 출발지: ${startPoint}\n- 도착지: ${endPoint}\n\n위 경로를 참고하여 아이스브레이커 3가지를 생성해주세요.`;
-
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                systemInstruction: {
-                    parts: [{ text: systemPrompt }]
-                },
-            };
-
-            return this.fetchWithRetry(apiUrl, payload);
+        signup: async (username, password) => {
+            const res = await fetch(`${API_BASE_URL}/api/users/signup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || "회원가입 실패 (이미 존재하는 ID일 수 있습니다)");
+            }
+            return await res.json();
         }
     };
 
-
-    // --- 메인 App 컴포넌트 ---
+    // --- [2] 메인 앱 컴포넌트 ---
     function App() {
-        // 'login', 'home', 'matched'
-        const [page, setPage] = useState('login');
-        const [user, setUser] = useState(null); // 로그인한 사용자 정보
-        const [matchInfo, setMatchInfo] = useState(null); // 매칭된 상대방 정보
-        const [isWaiting, setIsWaiting] = useState(false); // 매칭 대기 중 상태
-        const [isLoading, setIsLoading] = useState(false); // API 로딩 중
-        const [rideRequest, setRideRequest] = useState(null); // ✨ Gemini 프롬프트를 위해 추가
+        const [page, setPage] = useState('auth'); // auth(로그인/가입), home, matched
+        const [user, setUser] = useState(null);
+        const [matchInfo, setMatchInfo] = useState(null);
+        const [status, setStatus] = useState("IDLE"); 
+        
+        const stompClient = useRef(null);
+        const mapRef = useRef(null);
+        const startInputRef = useRef(null);
+        const endInputRef = useRef(null);
 
-        // Google Maps 요소 참조(Ref)
-        const startInputRef = useRef(null); // 출발지 <input>
-        const endInputRef = useRef(null);   // 목적지 <input>
-        const mapRef = useRef(null);      // 지도가 표시될 <div>
+        // 좌표 상태
+        const [startLoc, setStartLoc] = useState({ lat: 37.4979, lng: 127.0276, addr: "강남역" });
+        const [endLoc, setEndLoc] = useState({ lat: 37.3947, lng: 127.1111, addr: "판교역" });
 
-        // 'home' 페이지로 이동할 때 Google Maps와 WebSocket을 초기화합니다.
+
+        // [A] 로그인 성공 후 로직
         useEffect(() => {
-            if (page === 'home') {
-                // 1. Google Maps 초기화
-                initMapAndAutocomplete();
+            if (page === 'home' && user) {
+                connectWebSocket();
+                initGoogleMap();
+            }
+            return () => { if (stompClient.current) stompClient.current.disconnect(); };
+        }, [page, user]);
 
-                // 2. WebSocket 연결 (매칭 콜백 함수 전달)
-                const socket = connectMockSocket((matchData) => {
-                    // 매칭이 성공했을 때 실행될 콜백
-                    console.log("WebSocket: 매칭 데이터 수신:", matchData);
-                    setMatchInfo(matchData.opponent);
-                    setIsWaiting(false);
-                    setPage('matched'); // 매칭 완료 페이지로 이동
+
+        // [B] WebSocket 연결
+        const connectWebSocket = () => {
+            const socket = new SockJS(`${API_BASE_URL}/ws`);
+            const client = Stomp.over(socket);
+            client.debug = () => {}; 
+
+            client.connect({}, () => {
+                console.log("✅ WebSocket 연결됨");
+                client.subscribe(`/topic/match/${user.username}`, (msg) => {
+                    const data = JSON.parse(msg.body);
+                    setMatchInfo(data);
+                    setStatus("MATCHED");
+                    setPage("matched");
                 });
+            }, (err) => console.error(err));
+            stompClient.current = client;
+        };
 
-                // 컴포넌트가 사라질 때 (로그아웃 등) WebSocket 연결 해제
-                return () => {
-                    if (socket) socket.close();
-                };
-            }
-        }, [page]); // 'page' 상태가 바뀔 때마다 실행
 
-        // Google Map과 장소 자동완성 초기화 함수
-        const initMapAndAutocomplete = () => {
-            // Google API가 로드되었는지 확인
-            if (!window.google || !window.google.maps || !window.google.maps.places) {
-                console.error("Google Maps API가 로드되지 않았습니다.");
-                if (mapRef.current) {
-                    mapRef.current.innerHTML = `
-                        <div class="p-4 text-center text-red-600 bg-red-100 rounded-lg">
-                            <strong>Google Maps API 로드 실패!</strong><br/>
-                            API 키를 확인하거나 인터넷 연결을 확인하세요.<br/>
-                            (index.html 파일 상단의 'YOUR_API_KEY_HERE?' 확인)
-                        </div>`;
-                }
-                return;
-            }
-
-            // 1. 지도 생성 (기본 위치: 서울)
+        // [C] 지도 초기화
+        const initGoogleMap = () => {
+            if (!window.google || !window.google.maps) return;
             const map = new google.maps.Map(mapRef.current, {
-                center: { lat: 37.5665, lng: 126.9780 },
+                center: { lat: startLoc.lat, lng: startLoc.lng },
                 zoom: 13,
                 disableDefaultUI: true,
             });
-
-            // 2. 장소 자동완성 기능 (출발지, 목적지 input에 연결)
-            try {
-                const startAutocomplete = new google.maps.places.Autocomplete(startInputRef.current);
-                const endAutocomplete = new google.maps.places.Autocomplete(endInputRef.current);
-
-                // (선택) 자동완성 범위를 현재 지도 영역으로 제한할 수 있습니다.
-                startAutocomplete.bindTo('bounds', map);
-                endAutocomplete.bindTo('bounds', map);
-
-            } catch (error) {
-                console.error("장소 자동완성 초기화 실패:", error);
-            }
+            const setupAutocomplete = (inputRef, setLocFunc) => {
+                const autocomplete = new google.maps.places.Autocomplete(inputRef.current);
+                autocomplete.bindTo('bounds', map);
+                autocomplete.addListener('place_changed', () => {
+                    const place = autocomplete.getPlace();
+                    if (!place.geometry) return;
+                    setLocFunc({ 
+                        lat: place.geometry.location.lat(), 
+                        lng: place.geometry.location.lng(),
+                        addr: place.formatted_address 
+                    });
+                    if (place.geometry.viewport) map.fitBounds(place.geometry.viewport);
+                    else map.setCenter(place.geometry.location);
+                });
+            };
+            setupAutocomplete(startInputRef, setStartLoc);
+            setupAutocomplete(endInputRef, setEndLoc);
         };
 
-        // --- 이벤트 핸들러 ---
 
-        // 로그인 처리
-        const handleLogin = async (e) => {
-            e.preventDefault();
-            setIsLoading(true);
-            const username = e.target.username.value;
-            const password = e.target.password.value;
-
-            const response = await mockApi.login(username, password);
-            setIsLoading(false);
-
-            if (response.success) {
-                setUser(response.user);
-                setPage('home'); // 홈 페이지로 이동
-            }
-        };
-
-        // 카풀 요청 처리
+        // [D] 카풀 요청
         const handleRideRequest = (e) => {
             e.preventDefault();
-            const start = startInputRef.current.value;
-            const end = endInputRef.current.value;
-
-            // 유효성 검사 (간단하게)
-            if (!start || !end) {
-                // 실제 앱에서는 alert 대신 모달을 사용해야 합니다.
-                alert("출발지와 목적지를 모두 입력해주세요.");
-                return;
-            }
-
-            console.log(`카풀 요청: ${start} -> ${end}`);
-            setRideRequest({ start, end }); // ✨ 상태에 출발/도착지 저장
-            setIsWaiting(true); // 대기 상태로 변경
-
-            // WebSocket을 통해 서버로 카풀 요청 전송 (Mock)
-            if (mockSocket) {
-                mockSocket.send(JSON.stringify({
-                    type: 'requestRide',
-                    userId: user.username,
-                    startAddress: start,
-                    endAddress: end
-                }));
-            }
+            if (!stompClient.current) return;
+            const requestDto = {
+                username: user.username,
+                startLat: startLoc.lat,
+                startLng: startLoc.lng,
+                startAddress: startInputRef.current.value || startLoc.addr,
+                endLat: endLoc.lat,
+                endLng: endLoc.lng,
+                endAddress: endInputRef.current.value || endLoc.addr
+            };
+            stompClient.current.send("/app/match/request", {}, JSON.stringify(requestDto));
+            setStatus("WAITING");
         };
 
-        // 카풀 요청 취소
         const handleCancel = () => {
-            setIsWaiting(false);
-            // 실제라면 WebSocket으로 'cancelRide' 메시지를 보내야 합니다.
-            console.log("카풀 요청 취소됨.");
+            if (stompClient.current) stompClient.current.send("/app/match/cancel", {}, JSON.stringify({ username: user.username }));
+            setStatus("IDLE");
         };
 
-        // 매칭 완료 후 새 카풀 요청
-        const handleNewRide = () => {
-            setMatchInfo(null);
-            setPage('home');
-        };
+        // --- 렌더링 ---
+        
+        // 1. 인증(로그인/회원가입) 페이지
+        if (page === 'auth') {
+            return <AuthPage onLoginSuccess={(u) => { setUser(u); setPage('home'); }} />;
+        }
 
-        // --- 페이지 렌더링 ---
-        const renderPage = () => {
-            if (page === 'login') {
-                return <LoginPage onLogin={handleLogin} isLoading={isLoading} />;
-            }
-            if (page === 'home') {
-                return (
-                    <HomePage
-                        mapRef={mapRef}
-                        startInputRef={startInputRef}
-                        endInputRef={endInputRef}
-                        onSubmit={handleRideRequest}
-                        isWaiting={isWaiting}
-                        onCancel={handleCancel}
-                    />
-                );
-            }
-            if (page === 'matched') {
-                return <MatchedPage
-                            matchInfo={matchInfo}
-                            rideRequest={rideRequest} // ✨ 프롬프트용 데이터 전달
-                            onNewRide={handleNewRide}
-                       />;
-            }
-            return <div>페이지를 찾을 수 없습니다.</div>;
-        };
+        // 2. 메인 페이지
+        if (page === 'home') {
+            return (
+                <div className="bg-white w-full max-w-md p-6 rounded-3xl shadow-xl fade-in relative">
+                    <h2 className="text-xl font-bold mb-4">🚖 어디로 갈까요?</h2>
+                    <div ref={mapRef} className="w-full h-48 bg-slate-200 rounded-xl mb-4 text-center flex items-center justify-center text-slate-500 text-sm">
+                        {(!window.google) ? "Google Maps API 키 확인 필요" : "지도 로딩 중..."}
+                    </div>
 
-        return (
-            <div className="min-h-screen">
-                {/* 상단 헤더 */}
-                <Header user={user} />
-                {/* 메인 컨텐츠 */}
-                <main className="p-4 max-w-lg mx-auto">
-                    {renderPage()}
-                </main>
-            </div>
-        );
-    }
-
-    // --- UI 컴포넌트 ---
-
-    function Header({ user }) {
-        return (
-            <header className="bg-white shadow-md sticky top-0 z-10">
-                <div className="max-w-lg mx-auto p-4 flex justify-between items-center">
-                    <h1 className="text-2xl font-bold text-blue-600">카풀 앱 (과제용)</h1>
-                    {user && (
-                        <div className="text-sm font-medium text-gray-700">
-                            환영합니다, <span className="font-bold">{user.username}</span>님
+                    {status === "IDLE" ? (
+                        <form onSubmit={handleRideRequest} className="space-y-3">
+                            <div><label className="text-xs font-bold text-slate-500 ml-1">출발지</label><input ref={startInputRef} className="w-full p-3 border rounded-lg" defaultValue="강남역" /></div>
+                            <div><label className="text-xs font-bold text-slate-500 ml-1">도착지</label><input ref={endInputRef} className="w-full p-3 border rounded-lg" defaultValue="판교역" /></div>
+                            <button className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">카풀 매칭 시작</button>
+                        </form>
+                    ) : (
+                        <div className="text-center py-8 bg-blue-50 rounded-xl border border-blue-100">
+                            <div className="animate-spin text-3xl mb-3">🔄</div>
+                            <h3 className="font-bold text-blue-900">매칭 중입니다...</h3>
+                            <button onClick={handleCancel} className="mt-4 px-4 py-2 bg-white border text-slate-600 rounded-full text-sm">요청 취소</button>
                         </div>
                     )}
                 </div>
-            </header>
-        );
+            );
+        }
+
+        // 3. 매칭 성공 페이지
+        if (page === 'matched' && matchInfo) {
+            return (
+                <div className="bg-white w-full max-w-md p-6 rounded-3xl shadow-xl fade-in text-center">
+                    <div className="text-5xl mb-4">🎉</div>
+                    <h2 className="text-2xl font-bold text-green-600 mb-2">매칭 성공!</h2>
+                    <div className="bg-slate-50 p-4 rounded-xl text-left space-y-2 mb-6 border">
+                        <p>👤 <b>상대방:</b> {matchInfo.opponentUsername}</p>
+                        <p>📢 <b>타입:</b> {matchInfo.type === "GOTO" ? "이동하세요" : "기다리세요"}</p>
+                    </div>
+                    <button onClick={() => { setStatus("IDLE"); setPage("home"); setMatchInfo(null); }} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700">확인</button>
+                </div>
+            );
+        }
+        return <div>Error</div>;
     }
 
-    function LoginPage({ onLogin, isLoading }) {
+    // --- [3] 인증(로그인/회원가입) UI 컴포넌트 ---
+    function AuthPage({ onLoginSuccess }) {
+        const [isLogin, setIsLogin] = useState(true); // true: 로그인, false: 회원가입
+        const [username, setUsername] = useState("");
+        const [password, setPassword] = useState("");
+        const [isLoading, setIsLoading] = useState(false);
+
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            setIsLoading(true);
+            try {
+                if (isLogin) {
+                    // 로그인 시도
+                    const user = await api.login(username, password);
+                    onLoginSuccess(user);
+                } else {
+                    // 회원가입 시도
+                    await api.signup(username, password);
+                    alert("가입 성공! 이제 로그인해주세요.");
+                    setIsLogin(true); // 로그인 화면으로 전환
+                }
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
         return (
-            <div className="bg-white p-6 rounded-lg shadow-lg animate-fade-in mt-10">
-                <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">로그인</h2>
-                <form onSubmit={onLogin} className="space-y-4">
+            <div className="bg-white w-full max-w-sm p-6 rounded-3xl shadow-xl fade-in">
+                <h1 className="text-2xl font-bold text-center mb-6">🚖 택시 카풀</h1>
+                
+                {/* 탭 버튼 */}
+                <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+                    <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${isLogin ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>로그인</button>
+                    <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${!isLogin ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>회원가입</button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">사용자 아이디</label>
-                        <input
-                            name="username"
-                            type="text"
-                            required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            defaultValue="user_a"
-                        />
+                        <label className="block text-xs font-bold text-slate-500 mb-1">아이디</label>
+                        <input className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                               type="text" value={username} onChange={e=>setUsername(e.target.value)} placeholder="아이디 입력" required />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-                        <input
-                            name="password"
-                            type="password"
-                            required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            defaultValue="1234"
-                        />
+                        <label className="block text-xs font-bold text-slate-500 mb-1">비밀번호</label>
+                        <input className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                               type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="비밀번호 입력" required />
                     </div>
-                    <button
-                        type="submit"
-                        disabled={isLoading}
-                        className={`w-full py-2.5 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        {isLoading ? '로그인 중...' : '로그인 (테스트)'}
+
+                    {!isLogin && (
+                        <div className="p-3 bg-yellow-50 text-xs text-yellow-700 rounded-lg">
+                            * 현재 백엔드 설정상 <b>아이디/비밀번호</b>만 수집합니다.
+                        </div>
+                    )}
+
+                    <button disabled={isLoading} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:bg-slate-300 transition">
+                        {isLoading ? "처리 중..." : (isLogin ? "로그인" : "회원가입")}
                     </button>
                 </form>
             </div>
         );
     }
 
-    function HomePage({ mapRef, startInputRef, endInputRef, onSubmit, isWaiting, onCancel }) {
-        return (
-            <div className="bg-white p-6 rounded-lg shadow-lg animate-fade-in">
-
-                {/* 지도 표시 영역 */}
-                <div
-                    ref={mapRef}
-                    className="w-full h-48 bg-gray-200 rounded-lg mb-4 text-gray-500 flex items-center justify-center text-sm"
-                >
-                    (Google Map이 여기에 표시됩니다)
-                </div>
-
-                {!isWaiting ? (
-                    // --- 카풀 요청 폼 ---
-                    <form onSubmit={onSubmit} className="space-y-4">
-                        <h2 className="text-xl font-semibold text-gray-800">어디로 가시나요?</h2>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">출발지</label>
-                            <input
-                                ref={startInputRef}
-                                id="start-input"
-                                type="text"
-                                required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="예: 서울역"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">목적지</label>
-                            <input
-                                ref={endInputRef}
-                                id="end-input"
-                                type="text"
-                                required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="예: 강남역"
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            className="w-full py-2.5 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition duration-200"
-                        >
-                            실시간 카풀 요청
-                        </button>
-                    </form>
-                ) : (
-                    // --- 매칭 대기 중 ---
-                    <div className="text-center p-6 animate-fade-in">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="mt-4 text-lg font-semibold text-gray-700">매칭 상대를 찾고 있습니다...</p>
-                        <p className="text-sm text-gray-500">(5초 후 자동으로 매칭됩니다 - Mock)</p>
-                        <button
-                            onClick={onCancel}
-                            className="mt-6 w-full py-2 px-4 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition duration-200"
-                        >
-                            요청 취소
-                        </button>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    function MatchedPage({ matchInfo, rideRequest, onNewRide }) { // ✨ rideRequest prop 추가
-        const [isGenerating, setIsGenerating] = useState(false);
-        const [icebreakers, setIcebreakers] = useState("");
-
-        const handleGenerateIcebreakers = async () => {
-            if (!rideRequest) {
-                console.error("Icebreaker: rideRequest 데이터가 없습니다.");
-                setIcebreakers("오류: 카풀 요청 정보를 찾을 수 없습니다.");
-                return;
-            }
-
-            setIsGenerating(true);
-            setIcebreakers(""); // 이전 내용 초기화
-
-            const text = await geminiApi.generateIcebreakers(
-                rideRequest.start,
-                rideRequest.end
-            );
-
-            setIcebreakers(text);
-            setIsGenerating(false);
-        };
-
-        return (
-            <div className="bg-white p-6 rounded-lg shadow-lg animate-fade-in text-center mt-10">
-                <svg className="w-16 h-16 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <h2 className="text-2xl font-bold mt-4 mb-4 text-blue-600">매칭 성공!</h2>
-
-                <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-lg">
-                        <span className="font-semibold text-blue-700">{matchInfo.username}</span> 님과 매칭되었습니다.
-                    </p>
-                    <p className="text-gray-700">
-                        <span className="font-medium">상대방 출발지:</span> {matchInfo.start_address}
-                    </p>
-                    {/* 아키텍처에는 없지만, 실제라면 매칭 후 지도를 보여줘야 합니다. */}
-                </div>
-
-                {/* --- ✨ Gemini 기능 추가 --- */}
-                <div className="mt-6">
-                    <button
-                        onClick={handleGenerateIcebreakers}
-                        disabled={isGenerating}
-                        className={`w-full py-2.5 px-4 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 transition duration-200 ${isGenerating ? 'opacity-50 cursor-not-allowed animate-pulse' : ''}`}
-                    >
-                        {isGenerating ? 'AI 생각 중...' : '✨ 어색함 깨기 아이스브레이커'}
-                    </button>
-
-                    {icebreakers && (
-                        <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg text-left whitespace-pre-wrap text-gray-700 animate-fade-in">
-                            {icebreakers}
-                        </div>
-                    )}
-                </div>
-                {/* --- ✨ 끝 --- */}
-
-                <button
-                    onClick={onNewRide}
-                    className="mt-6 w-full py-2.5 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200"
-                >
-                    새로운 카풀 요청하기
-                </button>
-            </div>
-        );
-    }
-
-    // --- Google Maps 스크립트 동적 로드 및 앱 렌더링 ---
-
-    function loadGoogleMapsScript() {
-        // API 키가 설정되지 않았으면 경고만 하고 앱은 렌더링 (지도는 작동안함)
-       if (GOOGLE_MAPS_API_KEY === "YOUR_API_KEY_HERE") {
-            console.warn("!! Google Maps API 키가 설정되지 않았습니다. 'YOUR_API_KEY_HERE'를 교체하세요.");
-            console.warn("!! Google Cloud에서 '결제'를 활성화했는지 확인하세요.");
-            console.warn("!! 지도를 제외한 UI가 렌더링됩니다.");
-            renderReactApp();
-            return;
-        }
-
-        // 스크립트가 이미 로드되었는지 확인
-        if (window.google && window.google.maps) {
-            renderReactApp();
-            return;
-        }
-
+    // Google Maps Script Loader
+    if (GOOGLE_MAPS_API_KEY !== "YOUR_API_KEY_HERE") {
         const script = document.createElement('script');
-        // 'libraries=places'가 장소 자동완성을 위해 필수입니다.
         script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
         script.async = true;
-        script.defer = true;
-
-        // 스크립트 로드 성공 시 React 앱 렌더링
-        script.onload = () => {
-            console.log("Google Maps 스크립트 로드 성공.");
-            renderReactApp();
-        };
-        // 스크립트 로드 실패 시 (API 키 오류, 결제 미활성화 등)
-        script.onerror = () => {
-            console.error("Google Maps 스크립트 로드 실패. API 키와 '결제 활성화' 상태를 확인하세요.");
-            renderReactApp(); // 실패해도 앱은 렌더링
-        };
-
         document.head.appendChild(script);
     }
 
-    // React 앱을 #root에 렌더링하는 함수
-    function renderReactApp() {
-        try {
-            const root = ReactDOM.createRoot(document.getElementById('root'));
-            root.render(React.createElement(App));
-        } catch (e) {
-            console.error("React 앱 렌더링 실패:", e);
-            document.getElementById('root').innerHTML = "React 앱을 렌더링하는 데 실패했습니다. 콘솔을 확인하세요.";
-        }
-    }
-
-    // --- 앱 시작 ---
-    loadGoogleMapsScript();
-
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
 </html>
-

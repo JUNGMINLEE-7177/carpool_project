@@ -1,59 +1,53 @@
 package com.carpool.user;
 
-import com.carpool.user.dto.LoginRequestDto;
-import com.carpool.user.dto.LoginResponseDto;
-import com.carpool.user.dto.SignupRequestDto;
-import com.carpool.user.dto.UserResponseDto;
-import com.carpool.global.config.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
+
+// ✨ Lombok 적용: @RequiredArgsConstructor 추가
+// (수동 생성자 삭제)
 
 @Service
+@Transactional // DB 작업이므로 트랜잭션 적용
+@RequiredArgsConstructor // final이 붙은 필드(userRepository, passwordEncoder)의 생성자를 자동 주입
 public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtUtil jwtUtil;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtUtil = jwtUtil;
-    }
-
-    @Transactional
-    public UserResponseDto signup(SignupRequestDto req) {
-        if (userRepository.existsByUsername(req.getUsername())) {
-            throw new IllegalArgumentException("이미 사용 중인 사용자명입니다.");
-        }
-        if (userRepository.existsByEmail(req.getEmail())) {
-            throw new IllegalArgumentException("이미 등록된 이메일입니다.");
+    /**
+     * 회원가입
+     * * @param request (LoginRequestDto 사용)
+     * @return 생성된 User 객체
+     * @throws RuntimeException 이미 존재하는 아이디일 경우
+     */
+    public User signup(LoginRequestDto request) {
+        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
+            throw new RuntimeException("이미 존재하는 아이디입니다."); 
         }
 
-        String hashed = passwordEncoder.encode(req.getPassword());
-        User user = new User(req.getUsername(), req.getEmail(), hashed, Role.USER);
-        userRepository.save(user);
-        return UserResponseDto.of(user);
+        String encodedPassword = passwordEncoder.encode(request.getPassword());
+
+        User newUser = new User(request.getUsername(), encodedPassword);
+        return userRepository.save(newUser);
     }
 
-    @Transactional(readOnly = true)
-    public LoginResponseDto login(LoginRequestDto req) {
-        User user = userRepository.findByUsername(req.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
+    /**
+     * 로그인
+     * * @param request (LoginRequestDto 사용)
+     * @return 로그인 성공 시 User 객체
+     * @throws RuntimeException 아이디 또는 비밀번호가 틀릴 경우
+     */
+    @Transactional(readOnly = true) // 읽기 전용
+    public User login(LoginRequestDto request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("아이디 또는 비밀번호가 틀립니다."));
 
-        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new RuntimeException("아이디 또는 비밀번호가 틀립니다.");
         }
-
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole().name());
-        return new LoginResponseDto(token, UserResponseDto.of(user));
-    }
-
-    @Transactional(readOnly = true)
-    public UserResponseDto me(String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-        return UserResponseDto.of(user);
+        
+        return user;
     }
 }

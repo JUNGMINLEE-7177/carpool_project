@@ -17,7 +17,7 @@ public class MatchNotificationDto {
     private String opponentUsername;
     private String opponentStartAddress;
     private String opponentEndAddress;
-
+    
     // "GOTO" 타입일 때만 사용
     private Double targetLat; // 이동해야 할 목표 위도 (User 1의 출발지)
     private Double targetLng; // 이동해야 할 목표 경도 (User 1의 출발지)
